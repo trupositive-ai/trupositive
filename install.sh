@@ -19,7 +19,7 @@ if [ ! -f "$BIN_DIR/terraform-real" ]; then
 fi
 
 # Install wrapper
-curl -fsSL "https://raw.githubusercontent.com/$REPO/main/terraform" \
+curl -fsSL "https://raw.githubusercontent.com/simmestdagh/tf-git/main/terraform" \
   -o "$BIN_DIR/terraform"
 
 chmod +x "$BIN_DIR/terraform"
