@@ -47,17 +47,8 @@ EOF
       cat <<EOF
 
 # Azure doesn't support provider-level default_tags like AWS.
-# Instead, add this locals block to your Terraform configuration:
-
-locals {
-  default_tags = {
-    git_sha    = var.git_sha
-    git_branch = var.git_branch
-    git_repo   = var.git_repo
-  }
-}
-
-# Then add tags to each resource:
+# The locals block has been automatically added to tf-git.auto.tf.
+# Now add tags to each resource:
 #   tags = local.default_tags
 #
 # Example:
@@ -72,17 +63,8 @@ EOF
       cat <<EOF
 
 # GCP uses labels instead of tags, and provider-wide defaults aren't uniform.
-# Add this locals block to your Terraform configuration:
-
-locals {
-  default_labels = {
-    git_sha    = var.git_sha
-    git_branch = var.git_branch
-    git_repo   = var.git_repo
-  }
-}
-
-# Then add labels to each resource:
+# The locals block has been automatically added to tf-git.auto.tf.
+# Now add labels to each resource:
 #   labels = local.default_labels
 #
 # Example:
@@ -135,7 +117,33 @@ run_init() {
     local provider_file=$(echo "$existing_provider" | cut -d: -f1)
     local provider_line=$(echo "$existing_provider" | cut -d: -f2)
     
-    # Write variables file
+    # Generate locals block for Azure/GCP (AWS doesn't need it)
+    local locals_block=""
+    if [ "$provider" = "azurerm" ]; then
+      locals_block="
+
+# Default tags that will be applied to all resources
+locals {
+  default_tags = {
+    git_sha    = var.git_sha
+    git_branch = var.git_branch
+    git_repo   = var.git_repo
+  }
+}"
+    elif [ "$provider" = "google" ]; then
+      locals_block="
+
+# Default labels that can be applied to resources
+locals {
+  default_labels = {
+    git_sha    = var.git_sha
+    git_branch = var.git_branch
+    git_repo   = var.git_repo
+  }
+}"
+    fi
+    
+    # Write variables file (and locals for Azure/GCP)
     cat > "$filename" <<EOF
 # ===============================================
 # tf-git generated file
@@ -159,10 +167,15 @@ variable "git_repo" {
   type    = string
   default = "unknown"
 }
+$locals_block
 EOF
     
     echo ""
-    echo "✨ Created tf-git.auto.tf (variables only)"
+    if [ "$provider" = "aws" ]; then
+      echo "✨ Created tf-git.auto.tf (variables only)"
+    else
+      echo "✨ Created tf-git.auto.tf (variables and locals block)"
+    fi
     echo ""
     echo "⚠️  Provider block already exists in: $provider_file (line $provider_line)"
     echo ""
