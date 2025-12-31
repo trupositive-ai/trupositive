@@ -1,5 +1,6 @@
 #!/bin/bash
 # Terraform wrapper that automatically injects Git metadata as variables
+# PRODUCTION-READY VERSION with dynamic binary discovery
 
 set -e
 
@@ -18,5 +19,18 @@ export TF_VAR_git_sha="$GIT_SHA"
 export TF_VAR_git_branch="$GIT_BRANCH"
 export TF_VAR_git_repo="$GIT_REPO"
 
-# Pass through all arguments to terraform-real
-exec terraform-real "$@"
+# Find terraform binary dynamically
+# Priority: terraform-real (from installation) > which terraform > terraform in PATH
+if [ -f ~/.local/bin/terraform-real ]; then
+    TERRAFORM_BIN=~/.local/bin/terraform-real
+elif command -v terraform-real >/dev/null 2>&1; then
+    TERRAFORM_BIN=$(command -v terraform-real)
+elif command -v terraform >/dev/null 2>&1; then
+    TERRAFORM_BIN=$(command -v terraform)
+else
+    echo "Error: terraform binary not found. Please install Terraform." >&2
+    exit 1
+fi
+
+# Pass through all arguments to terraform
+exec "$TERRAFORM_BIN" "$@"

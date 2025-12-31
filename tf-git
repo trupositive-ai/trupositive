@@ -46,21 +46,52 @@ EOF
     azurerm)
       cat <<EOF
 
-# Add this default_tags block to your existing provider "azurerm" block:
-  default_tags {
-    tags = {
-      git_sha    = var.git_sha
-      git_branch = var.git_branch
-      git_repo   = var.git_repo
-    }
+# Azure doesn't support provider-level default_tags like AWS.
+# Instead, add this locals block to your Terraform configuration:
+
+locals {
+  default_tags = {
+    git_sha    = var.git_sha
+    git_branch = var.git_branch
+    git_repo   = var.git_repo
   }
+}
+
+# Then add tags to each resource:
+#   tags = local.default_tags
+#
+# Example:
+# resource "azurerm_storage_account" "example" {
+#   name     = "example"
+#   ...
+#   tags = local.default_tags
+# }
 EOF
       ;;
     google)
       cat <<EOF
 
-# Note: GCP uses labels instead of tags, and provider-wide defaults aren't uniform.
-# You may need to add labels per resource or use a module.
+# GCP uses labels instead of tags, and provider-wide defaults aren't uniform.
+# Add this locals block to your Terraform configuration:
+
+locals {
+  default_labels = {
+    git_sha    = var.git_sha
+    git_branch = var.git_branch
+    git_repo   = var.git_repo
+  }
+}
+
+# Then add labels to each resource:
+#   labels = local.default_labels
+#
+# Example:
+# resource "google_storage_bucket" "example" {
+#   name     = "example"
+#   ...
+#   labels = local.default_labels
+# }
+#
 # See: https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#labels
 EOF
       ;;
@@ -162,21 +193,41 @@ EOF
         ;;
       google)
         provider_block="provider \"google\" {
-  # Note: GCP uses labels instead of tags, and provider-wide defaults aren't uniform.
-  # You may need to add labels per resource or use a module.
-  # See: https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#labels
-}"
+  # GCP configuration
+}
+
+# Default labels that can be applied to resources
+# Note: GCP uses labels instead of tags, and provider-wide defaults aren't uniform.
+# You may need to add labels per resource or use a module.
+locals {
+  default_labels = {
+    git_sha    = var.git_sha
+    git_branch = var.git_branch
+    git_repo   = var.git_repo
+  }
+}
+
+# Example usage:
+# resource \"google_storage_bucket\" \"example\" {
+#   name     = \"example\"
+#   ...
+#   labels = local.default_labels
+# }
+#
+# See: https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#labels
+"
         ;;
       azurerm)
         provider_block="provider \"azurerm\" {
   features {}
+}
 
-  default_tags {
-    tags = {
-      git_sha    = var.git_sha
-      git_branch = var.git_branch
-      git_repo   = var.git_repo
-    }
+# Default tags that will be applied to all resources
+locals {
+  default_tags = {
+    git_sha    = var.git_sha
+    git_branch = var.git_branch
+    git_repo   = var.git_repo
   }
 }"
         ;;

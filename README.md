@@ -113,6 +113,77 @@ This prevents duplicate provider configuration errors. You'll need to manually a
 
 **Note on GCP:** GCP uses labels instead of tags, and provider-wide defaults aren't uniform. You may need to add labels per resource or use a module for GCP projects.
 
+## Provider-Specific Notes
+
+### AWS Provider
+
+AWS supports provider-level `default_tags` which automatically applies tags to all resources:
+
+```hcl
+provider "aws" {
+  default_tags {
+    tags = {
+      git_sha    = var.git_sha
+      git_branch = var.git_branch
+      git_repo   = var.git_repo
+    }
+  }
+}
+```
+
+This works automatically - no manual tagging needed!
+
+### Azure Provider
+
+**Important:** The Azure provider (`azurerm`) does **NOT** support provider-level `default_tags` like AWS. Instead, `tf-git init` generates a `locals` block:
+
+```hcl
+locals {
+  default_tags = {
+    git_sha    = var.git_sha
+    git_branch = var.git_branch
+    git_repo   = var.git_repo
+  }
+}
+```
+
+You need to manually add `tags = local.default_tags` to each resource:
+
+```hcl
+resource "azurerm_storage_account" "example" {
+  name     = "example"
+  location = "westeurope"
+  ...
+  tags = local.default_tags
+}
+```
+
+### GCP Provider
+
+GCP uses labels instead of tags, and provider-wide defaults aren't uniform. `tf-git init` generates a `locals` block with `default_labels`:
+
+```hcl
+locals {
+  default_labels = {
+    git_sha    = var.git_sha
+    git_branch = var.git_branch
+    git_repo   = var.git_repo
+  }
+}
+```
+
+Add `labels = local.default_labels` to each resource that supports labels:
+
+```hcl
+resource "google_storage_bucket" "example" {
+  name     = "example"
+  ...
+  labels = local.default_labels
+}
+```
+
+See the [GCP provider documentation](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#labels) for more details.
+
 ## How It Works
 
 When you run `terraform apply`, what actually happens is:
@@ -135,7 +206,11 @@ Terraform is completely unaware of the wrapper.
 
 ### Option 1: Automatic Tagging (Recommended)
 
-Run `tf-git init` to automatically generate `tf-git.auto.tf` with provider `default_tags`. This applies tags to all resources automatically.
+Run `tf-git init` to automatically generate `tf-git.auto.tf` with provider configuration.
+
+**AWS:** Uses provider-level `default_tags` - tags are applied automatically to all resources.
+
+**Azure/GCP:** Generates a `locals` block - you'll need to add `tags = local.default_tags` (or `labels = local.default_labels` for GCP) to each resource manually.
 
 ### Option 2: Manual Configuration
 
