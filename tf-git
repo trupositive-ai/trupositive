@@ -166,12 +166,21 @@ EOF
     echo ""
     echo "⚠️  Provider block already exists in: $provider_file (line $provider_line)"
     echo ""
-    echo "To enable automatic tagging, add the following to your existing"
-    echo "provider \"$provider\" block in $provider_file:"
+    if [ "$provider" = "aws" ]; then
+      echo "To enable automatic tagging, add the following to your existing"
+      echo "provider \"$provider\" block in $provider_file:"
+    else
+      echo "To enable automatic tagging, add the following configuration"
+      echo "to your Terraform files:"
+    fi
     echo ""
     generate_provider_patch "$provider" "$provider_file" "$provider_line"
     echo ""
-    echo "After adding default_tags, commit both files:"
+    if [ "$provider" = "aws" ]; then
+      echo "After adding default_tags, commit both files:"
+    else
+      echo "After adding the configuration, commit both files:"
+    fi
     echo "  git add tf-git.auto.tf $provider_file"
     echo "  git commit -m \"Enable tf-git Terraform tagging\""
     echo ""
