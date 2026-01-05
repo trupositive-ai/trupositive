@@ -1,0 +1,424 @@
+#!/bin/bash
+# trupositive CLI - handles init command and passes through to terraform wrapper
+
+set -e
+
+# Function to detect existing provider blocks
+# Uses more precise pattern matching to avoid false positives from comments/strings
+detect_existing_provider() {
+  local provider="$1"
+  local provider_file=""
+  local provider_line=""
+  
+  # Security: Validate provider input
+  case "$provider" in
+    aws|google|azurerm)
+      # Valid provider
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  
+  # Search for existing provider blocks
+  # Pattern: provider "provider_name" { (not in comments or strings)
+  for file in *.tf; do
+    [ -f "$file" ] || continue
+    
+    # Security: Ensure file is in current directory (no path traversal)
+    if [[ "$file" == *"/"* ]] || [[ "$file" == *".."* ]]; then
+      continue  # Skip suspicious filenames
+    fi
+    if [ "$(dirname "$file")" != "." ]; then
+      continue  # Skip files not in current directory
+    fi
+    
+    # Use awk to find provider blocks, skipping comments and strings
+    # Look for: provider "provider_name" { on a line (possibly with whitespace)
+    if awk '
+      /^[[:space:]]*provider[[:space:]]+"'"$provider"'"[[:space:]]*\{/ {
+        if (!/^[[:space:]]*#/) {  # Not a comment
+          print FILENAME":"NR
+          exit 0
+        }
+      }
+    ' "$file" 2>/dev/null | head -1 | read -r result && [ -n "$result" ]; then
+      provider_file=$(echo "$result" | cut -d: -f1)
+      provider_line=$(echo "$result" | cut -d: -f2)
+      
+      # Security: Validate extracted filename
+      if [[ "$provider_file" == *"/"* ]] || [[ "$provider_file" == *".."* ]]; then
+        continue  # Skip suspicious filenames
+      fi
+      if [ "$(dirname "$provider_file")" != "." ]; then
+        continue  # Skip files not in current directory
+      fi
+      
+      echo "$provider_file:$provider_line"
+      return 0
+    fi
+  done
+  
+  return 1
+}
+
+# Function to generate provider patch
+generate_provider_patch() {
+  local provider="$1"
+  local provider_file="$2"
+  local provider_line="$3"
+  
+  case "$provider" in
+    aws)
+      cat <<EOF
+
+# Add this default_tags block to your existing provider "aws" block:
+  default_tags {
+    tags = {
+      git_sha    = var.git_sha
+      git_branch = var.git_branch
+      git_repo   = var.git_repo
+    }
+  }
+EOF
+      ;;
+    azurerm)
+      cat <<EOF
+
+# Azure doesn't support provider-level default_tags like AWS.
+# The locals block has been automatically added to trupositive.auto.tf.
+# Now add tags to each resource:
+#   tags = local.default_tags
+#
+# Example:
+# resource "azurerm_storage_account" "example" {
+#   name     = "example"
+#   ...
+#   tags = local.default_tags
+# }
+EOF
+      ;;
+    google)
+      cat <<EOF
+
+# GCP uses labels instead of tags, and provider-wide defaults aren't uniform.
+# The locals block has been automatically added to trupositive.auto.tf.
+# Now add labels to each resource:
+#   labels = local.default_labels
+#
+# Example:
+# resource "google_storage_bucket" "example" {
+#   name     = "example"
+#   ...
+#   labels = local.default_labels
+# }
+#
+# See: https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#labels
+EOF
+      ;;
+  esac
+}
+
+# Function to generate trupositive.auto.tf
+run_init() {
+  # Security: Hardcode filename to prevent path traversal
+  local filename="trupositive.auto.tf"
+  
+  # Security: Ensure filename doesn't contain path separators
+  if [[ "$filename" == *"/"* ]] || [[ "$filename" == *".."* ]]; then
+    echo "❌ Error: Invalid filename" >&2
+    return 1
+  fi
+  
+  # Check if file already exists
+  if [ -f "$filename" ]; then
+    echo "⚠️  trupositive.auto.tf already exists — aborting to avoid overwrite"
+    echo "   Delete the file first if you want to regenerate it"
+    return 1
+  fi
+  
+  # Validate we're in a directory with .tf files
+  if ! ls *.tf >/dev/null 2>&1; then
+    echo "❌ Error: No .tf files found in current directory" >&2
+    echo "   Please run 'trupositive init' from a Terraform project directory" >&2
+    return 1
+  fi
+  
+  # Check write permissions
+  if [ ! -w . ]; then
+    echo "❌ Error: No write permission in current directory" >&2
+    return 1
+  fi
+  
+  # Detect provider by checking existing .tf files
+  # Use more precise pattern matching to avoid false positives from comments/strings
+  local provider="azurerm"
+  local provider_found=false
+  
+  # Security: Validate we're only processing files in current directory
+  # Prevent path traversal by ensuring no subdirectories
+  for file in *.tf; do
+    [ -f "$file" ] || continue
+    # Security: Ensure file is in current directory (no path separators)
+    if [[ "$file" == *"/"* ]] || [[ "$file" == *".."* ]]; then
+      continue  # Skip suspicious filenames
+    fi
+    # Security: Ensure it's a regular file in current directory
+    if [ "$(dirname "$file")" != "." ]; then
+      continue  # Skip files not in current directory
+    fi
+    
+    # Skip lines starting with # (comments)
+    # Match: whitespace* provider whitespace* "provider_name" whitespace* {
+    if grep -E '^[[:space:]]*provider[[:space:]]+"aws"[[:space:]]*\{' "$file" 2>/dev/null | grep -v '^[[:space:]]*#' | grep -q .; then
+      provider="aws"
+      provider_found=true
+      break
+    elif grep -E '^[[:space:]]*provider[[:space:]]+"google"[[:space:]]*\{' "$file" 2>/dev/null | grep -v '^[[:space:]]*#' | grep -q .; then
+      provider="google"
+      provider_found=true
+      break
+    elif grep -E '^[[:space:]]*provider[[:space:]]+"azurerm"[[:space:]]*\{' "$file" 2>/dev/null | grep -v '^[[:space:]]*#' | grep -q .; then
+      provider="azurerm"
+      provider_found=true
+      break
+    fi
+  done
+  
+  # Security: Validate provider is one of the allowed values
+  case "$provider" in
+    aws|google|azurerm)
+      # Valid provider
+      ;;
+    *)
+      echo "❌ Error: Invalid provider detected: $provider" >&2
+      return 1
+      ;;
+  esac
+  
+  # Check if provider block already exists
+  local existing_provider=""
+  if [ "$provider_found" = true ]; then
+    existing_provider=$(detect_existing_provider "$provider")
+  fi
+  
+  if [ -n "$existing_provider" ]; then
+    # Provider block exists - generate variables file and patch instructions
+    local provider_file=$(echo "$existing_provider" | cut -d: -f1)
+    local provider_line=$(echo "$existing_provider" | cut -d: -f2)
+    
+    # Security: Validate provider_file to prevent path traversal
+    # Only allow filenames in current directory (no path separators)
+    if [[ "$provider_file" == *"/"* ]] || [[ "$provider_file" == *".."* ]]; then
+      echo "❌ Error: Invalid provider file path detected" >&2
+      return 1
+    fi
+    
+    # Validate provider_file exists and is a regular file in current directory
+    if [ ! -f "$provider_file" ] || [ "$(dirname "$provider_file")" != "." ]; then
+      echo "❌ Error: Provider file validation failed" >&2
+      return 1
+    fi
+    
+    # Generate locals block for Azure/GCP (AWS doesn't need it)
+    local locals_block=""
+    if [ "$provider" = "azurerm" ]; then
+      locals_block="
+
+# Default tags that will be applied to all resources
+locals {
+  default_tags = {
+    git_sha    = var.git_sha
+    git_branch = var.git_branch
+    git_repo   = var.git_repo
+  }
+}"
+    elif [ "$provider" = "google" ]; then
+      locals_block="
+
+# Default labels that can be applied to resources
+locals {
+  default_labels = {
+    git_sha    = var.git_sha
+    git_branch = var.git_branch
+    git_repo   = var.git_repo
+  }
+}"
+    fi
+    
+    # Write variables file (and locals for Azure/GCP)
+    cat > "$filename" <<EOF
+# ===============================================
+# trupositive generated file
+# ===============================================
+# This file was generated by 'trupositive init'
+# It auto-configures Git tagging in Terraform.
+# Safe to delete! Do not modify the generated file.
+# ===============================================
+
+variable "git_sha" {
+  type    = string
+  default = "unknown"
+}
+
+variable "git_branch" {
+  type    = string
+  default = "unknown"
+}
+
+variable "git_repo" {
+  type    = string
+  default = "unknown"
+}
+$locals_block
+EOF
+    
+    echo ""
+    if [ "$provider" = "aws" ]; then
+      echo "✨ Created trupositive.auto.tf (variables only)"
+    else
+      echo "✨ Created trupositive.auto.tf (variables and locals block)"
+    fi
+    echo ""
+    echo "⚠️  Provider block already exists in: $provider_file (line $provider_line)"
+    echo ""
+    if [ "$provider" = "aws" ]; then
+      echo "To enable automatic tagging, add the following to your existing"
+      echo "provider \"$provider\" block in $provider_file:"
+    else
+      echo "To enable automatic tagging, add the following configuration"
+      echo "to your Terraform files:"
+    fi
+    echo ""
+    generate_provider_patch "$provider" "$provider_file" "$provider_line"
+    echo ""
+    if [ "$provider" = "aws" ]; then
+      echo "After adding default_tags, commit both files:"
+    else
+      echo "After adding the configuration, commit both files:"
+    fi
+    # Security: Sanitize provider_file for display (already validated above)
+    local safe_provider_file="$provider_file"
+    echo "  git add trupositive.auto.tf $safe_provider_file"
+    echo "  git commit -m \"Enable trupositive Terraform tagging\""
+    echo ""
+    
+  else
+    # No provider block exists - generate complete file
+    local provider_block=""
+    case "$provider" in
+      aws)
+        provider_block="provider \"aws\" {
+  default_tags {
+    tags = {
+      git_sha    = var.git_sha
+      git_branch = var.git_branch
+      git_repo   = var.git_repo
+    }
+  }
+}"
+        ;;
+      google)
+        provider_block="provider \"google\" {
+  # GCP configuration
+}
+
+# Default labels that can be applied to resources
+# Note: GCP uses labels instead of tags, and provider-wide defaults aren't uniform.
+# You may need to add labels per resource or use a module.
+locals {
+  default_labels = {
+    git_sha    = var.git_sha
+    git_branch = var.git_branch
+    git_repo   = var.git_repo
+  }
+}
+
+# Example usage:
+# resource \"google_storage_bucket\" \"example\" {
+#   name     = \"example\"
+#   ...
+#   labels = local.default_labels
+# }
+#
+# See: https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#labels
+"
+        ;;
+      azurerm)
+        provider_block="provider \"azurerm\" {
+  features {}
+}
+
+# Default tags that will be applied to all resources
+locals {
+  default_tags = {
+    git_sha    = var.git_sha
+    git_branch = var.git_branch
+    git_repo   = var.git_repo
+  }
+}"
+        ;;
+    esac
+    
+    # Write the complete file
+    cat > "$filename" <<EOF
+# ===============================================
+# trupositive generated file
+# ===============================================
+# This file was generated by 'trupositive init'
+# It auto-configures Git tagging in Terraform.
+# Safe to delete! Do not modify the generated file.
+# ===============================================
+
+variable "git_sha" {
+  type    = string
+  default = "unknown"
+}
+
+variable "git_branch" {
+  type    = string
+  default = "unknown"
+}
+
+variable "git_repo" {
+  type    = string
+  default = "unknown"
+}
+
+$provider_block
+EOF
+    
+    echo ""
+    echo "✨ Created trupositive.auto.tf"
+    echo "✔  Git tagging configured automatically (detected provider: $provider)"
+    echo "🔁 Safe to delete the file if you change your tagging strategy"
+    echo "📝 Commit the file if you want permanent tagging"
+    echo ""
+  fi
+}
+
+# Handle init command
+if [ "$1" = "init" ]; then
+  run_init
+  exit $?
+fi
+
+# For all other commands, pass through to terraform wrapper
+# Find terraform-real to avoid infinite loop
+# Priority: terraform-real (from installation) > which terraform > terraform in PATH
+TERRAFORM_WRAPPER=""
+if [ -f ~/.local/bin/terraform-real ]; then
+    TERRAFORM_WRAPPER=~/.local/bin/terraform-real
+elif command -v terraform-real >/dev/null 2>&1; then
+    TERRAFORM_WRAPPER=$(command -v terraform-real)
+elif [ -f ~/.local/bin/terraform ]; then
+    # Use the wrapper if it exists
+    TERRAFORM_WRAPPER=~/.local/bin/terraform
+elif command -v terraform >/dev/null 2>&1; then
+    TERRAFORM_WRAPPER=$(command -v terraform)
+else
+    echo "Error: terraform binary not found. Please install Terraform." >&2
+    exit 1
+fi
+
+exec "$TERRAFORM_WRAPPER" "$@"

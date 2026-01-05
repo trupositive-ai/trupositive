@@ -11,28 +11,42 @@ if [ -z "$REAL_TF" ]; then
   exit 1
 fi
 
-mkdir -p "$BIN_DIR"
+mkdir -p "$BIN_DIR" || {
+  echo "Error: Cannot create directory $BIN_DIR" >&2
+  exit 1
+}
 
-# Backup/update real terraform
-# Always update to ensure we're using the latest terraform version
-if [ -f "$BIN_DIR/terraform-real" ]; then
-  echo "Updating terraform-real to latest version..."
-fi
-cp "$REAL_TF" "$BIN_DIR/terraform-real"
+[ -w "$BIN_DIR" ] || {
+  echo "Error: Directory $BIN_DIR is not writable" >&2
+  exit 1
+}
 
-# Install terraform wrapper
+cp "$REAL_TF" "$BIN_DIR/terraform-real" || {
+  echo "Error: Failed to copy terraform binary" >&2
+  exit 1
+}
+
 curl -fsSL "https://raw.githubusercontent.com/trupositive/trupositive/main/terraform" \
-  -o "$BIN_DIR/terraform"
+  -o "$BIN_DIR/terraform" || {
+  echo "Error: Failed to download terraform wrapper" >&2
+  exit 1
+}
 
-chmod +x "$BIN_DIR/terraform"
+chmod +x "$BIN_DIR/terraform" || {
+  echo "Error: Failed to make terraform wrapper executable" >&2
+  exit 1
+}
 
-# Install trupositive CLI
 curl -fsSL "https://raw.githubusercontent.com/trupositive/trupositive/main/trupositive" \
-  -o "$BIN_DIR/trupositive"
+  -o "$BIN_DIR/trupositive" || {
+  echo "Error: Failed to download trupositive CLI" >&2
+  exit 1
+}
 
-chmod +x "$BIN_DIR/trupositive"
+chmod +x "$BIN_DIR/trupositive" || {
+  echo "Error: Failed to make trupositive CLI executable" >&2
+  exit 1
+}
 
-echo ""
 echo "trupositive installed successfully"
-echo "Make sure $BIN_DIR is before terraform in PATH:"
-echo "  export PATH=\"$BIN_DIR:\$PATH\""
+echo "Add to PATH: export PATH=\"$BIN_DIR:\$PATH\""

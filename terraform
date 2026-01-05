@@ -1,6 +1,5 @@
 #!/bin/bash
 # Terraform wrapper that automatically injects Git metadata as variables
-# PRODUCTION-READY VERSION with dynamic binary discovery
 
 set -e
 
@@ -11,13 +10,21 @@ GIT_SHA=$(git rev-parse HEAD 2>/dev/null || echo "")
 GIT_BRANCH=$(git symbolic-ref --short -q HEAD 2>/dev/null || \
   git rev-parse --abbrev-ref HEAD 2>/dev/null || \
   echo "${GITHUB_REF_NAME:-${CI_COMMIT_REF_NAME:-${BUILD_SOURCEBRANCHNAME:-${BRANCH_NAME:-HEAD}}}}")
+# Security: Sanitize branch name and limit length
+GIT_BRANCH=$(echo "$GIT_BRANCH" | sed 's/[^a-zA-Z0-9\/.\-_\@]//g' | head -c 200)
 
 GIT_REPO=$(git config --get remote.origin.url 2>/dev/null || echo "")
+
+# Sanitize Git repo URL to prevent injection
+# Remove any characters that could break Terraform variable assignment
+# Keep only alphanumeric, :, /, ., -, _, @, and space
+# Also limit length to prevent extremely long URLs
+GIT_REPO_SANITIZED=$(echo "$GIT_REPO" | sed 's/[^a-zA-Z0-9:\/.\-_\@ ]//g' | head -c 1000 || echo "")
 
 # Export as Terraform variables
 export TF_VAR_git_sha="$GIT_SHA"
 export TF_VAR_git_branch="$GIT_BRANCH"
-export TF_VAR_git_repo="$GIT_REPO"
+export TF_VAR_git_repo="$GIT_REPO_SANITIZED"
 
 # Find terraform binary dynamically
 # Priority: terraform-real (from installation) > which terraform > terraform in PATH
