@@ -2,7 +2,7 @@
 set -e
 
 BIN_DIR="$HOME/.local/bin"
-REPO="simmestdagh/tf-git"
+REPO="trupositive/trupositive"
 
 REAL_TF="$(command -v terraform || true)"
 
@@ -21,18 +21,18 @@ fi
 cp "$REAL_TF" "$BIN_DIR/terraform-real"
 
 # Install terraform wrapper
-curl -fsSL "https://raw.githubusercontent.com/simmestdagh/tf-git/main/terraform" \
+curl -fsSL "https://raw.githubusercontent.com/trupositive/trupositive/main/terraform" \
   -o "$BIN_DIR/terraform"
 
 chmod +x "$BIN_DIR/terraform"
 
-# Install tf-git CLI
-curl -fsSL "https://raw.githubusercontent.com/simmestdagh/tf-git/main/tf-git" \
-  -o "$BIN_DIR/tf-git"
+# Install trupositive CLI
+curl -fsSL "https://raw.githubusercontent.com/trupositive/trupositive/main/trupositive" \
+  -o "$BIN_DIR/trupositive"
 
-chmod +x "$BIN_DIR/tf-git"
+chmod +x "$BIN_DIR/trupositive"
 
 echo ""
-echo "tf-git installed successfully"
+echo "trupositive installed successfully"
 echo "Make sure $BIN_DIR is before terraform in PATH:"
 echo "  export PATH=\"$BIN_DIR:\$PATH\""
