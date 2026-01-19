@@ -1,6 +1,12 @@
 # trupositive
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Bash](https://img.shields.io/badge/bash-5.0+-green.svg)](https://www.gnu.org/software/bash/)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/trupositive-ai/trupositive/releases)
+
 A zero-config infrastructure-as-code wrapper that automatically injects Git metadata. Supports both **Terraform** and **AWS CloudFormation**. Works transparently with any command.
+
+> **Latest Release:** v1.1.0 - Now with CloudFormation support!
 
 ## Installation
 
@@ -154,10 +160,26 @@ Automatically detects branch names from CI environment variables (GitHub Actions
   - Terraform (for Terraform projects)
   - AWS CLI (for CloudFormation projects)
 
+## Documentation
+
+- [Examples](EXAMPLES.md) - Complete usage examples
+- [Testing Guide](TESTING.md) - How to test the tool
+- [Feature Documentation](FEATURE_CLOUDFORMATION.md) - CloudFormation feature details
+- [Contributing](CONTRIBUTING.md) - How to contribute
+- [Security Policy](SECURITY.md) - Security guidelines
+- [Changelog](CHANGELOG.md) - Version history
+
 ## Contributing
 
 Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Security
 
-Report security issues to [SECURITY.md](SECURITY.md).
+Report security issues per [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE) - Copyright (c) 2024-2026 trupositive-ai
+
+---
+
