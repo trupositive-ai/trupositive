@@ -2,7 +2,7 @@
 set -e
 
 BIN_DIR="$HOME/.local/bin"
-REPO="trupositive/trupositive"
+REPO="trupositive-ai/trupositive"
 
 REAL_TF="$(command -v terraform || true)"
 
@@ -26,7 +26,7 @@ cp "$REAL_TF" "$BIN_DIR/terraform-real" || {
   exit 1
 }
 
-curl -fsSL "https://raw.githubusercontent.com/trupositive/trupositive/main/terraform" \
+curl -fsSL "https://raw.githubusercontent.com/trupositive-ai/trupositive/main/terraform" \
   -o "$BIN_DIR/terraform" || {
   echo "Error: Failed to download terraform wrapper" >&2
   exit 1
@@ -37,7 +37,7 @@ chmod +x "$BIN_DIR/terraform" || {
   exit 1
 }
 
-curl -fsSL "https://raw.githubusercontent.com/trupositive/trupositive/main/trupositive" \
+curl -fsSL "https://raw.githubusercontent.com/trupositive-ai/trupositive/main/trupositive" \
   -o "$BIN_DIR/trupositive" || {
   echo "Error: Failed to download trupositive CLI" >&2
   exit 1
