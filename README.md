@@ -5,7 +5,7 @@ A zero-config Terraform wrapper that automatically injects Git metadata as varia
 ## Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/trupositive/trupositive/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/trupositive-ai/trupositive/main/install.sh | bash
 ```
 
 Ensure `~/.local/bin` is in your PATH:
@@ -17,7 +17,7 @@ export PATH="$HOME/.local/bin:$PATH"
 ## Uninstallation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/trupositive/trupositive/main/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/trupositive-ai/trupositive/main/uninstall.sh | bash
 ```
 
 ## Usage
