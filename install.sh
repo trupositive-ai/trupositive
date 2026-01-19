@@ -21,6 +21,11 @@ mkdir -p "$BIN_DIR" || {
   exit 1
 }
 
+# Remove existing terraform-real if it exists (from previous installation)
+if [ -f "$BIN_DIR/terraform-real" ]; then
+  rm "$BIN_DIR/terraform-real"
+fi
+
 cp "$REAL_TF" "$BIN_DIR/terraform-real" || {
   echo "Error: Failed to copy terraform binary" >&2
   exit 1
