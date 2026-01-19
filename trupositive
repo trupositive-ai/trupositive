@@ -35,14 +35,15 @@ detect_existing_provider() {
     
     # Use awk to find provider blocks, skipping comments and strings
     # Look for: provider "provider_name" { on a line (possibly with whitespace)
-    if awk '
+    result="$(awk '
       /^[[:space:]]*provider[[:space:]]+"'"$provider"'"[[:space:]]*\{/ {
         if (!/^[[:space:]]*#/) {  # Not a comment
           print FILENAME":"NR
           exit 0
         }
       }
-    ' "$file" 2>/dev/null | head -1 | read -r result && [ -n "$result" ]; then
+    ' "$file" 2>/dev/null | head -1)"
+    if [ -n "$result" ]; then
       provider_file=$(echo "$result" | cut -d: -f1)
       provider_line=$(echo "$result" | cut -d: -f2)
       
