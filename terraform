@@ -1,25 +1,31 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 # Terraform wrapper that automatically injects Git metadata as variables
+# Part of trupositive: https://github.com/trupositive-ai/trupositive
 
 set -e
+set -o pipefail
 
-# Extract Git metadata
-GIT_SHA=$(git rev-parse HEAD 2>/dev/null || echo "")
+# Extract Git metadata with safe defaults
+GIT_SHA=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
 
 # Try to get branch name with better CI/detached HEAD handling
 GIT_BRANCH=$(git symbolic-ref --short -q HEAD 2>/dev/null || \
   git rev-parse --abbrev-ref HEAD 2>/dev/null || \
-  echo "${GITHUB_REF_NAME:-${CI_COMMIT_REF_NAME:-${BUILD_SOURCEBRANCHNAME:-${BRANCH_NAME:-HEAD}}}}")
-# Security: Sanitize branch name and limit length
-GIT_BRANCH=$(echo "$GIT_BRANCH" | sed 's/[^a-zA-Z0-9\/.\-_\@]//g' | head -c 200)
+  echo "${GITHUB_REF_NAME:-${CI_COMMIT_REF_NAME:-${BUILD_SOURCEBRANCHNAME:-${BRANCH_NAME:-unknown}}}}")
 
-GIT_REPO=$(git config --get remote.origin.url 2>/dev/null || echo "")
+# Security: Sanitize branch name and limit length
+# Remove any characters that could break Terraform variable assignment
+GIT_BRANCH=$(echo "$GIT_BRANCH" | sed 's/[^a-zA-Z0-9\/.\-_]//g' | head -c 200)
+[ -z "$GIT_BRANCH" ] && GIT_BRANCH="unknown"
+
+GIT_REPO=$(git config --get remote.origin.url 2>/dev/null || echo "unknown")
 
 # Sanitize Git repo URL to prevent injection
-# Remove any characters that could break Terraform variable assignment
-# Keep only alphanumeric, :, /, ., -, _, @, and space
+# Keep only alphanumeric, :, /, ., -, _, and @
 # Also limit length to prevent extremely long URLs
-GIT_REPO_SANITIZED=$(echo "$GIT_REPO" | sed 's/[^a-zA-Z0-9:\/.\-_\@ ]//g' | head -c 1000 || echo "")
+GIT_REPO_SANITIZED=$(echo "$GIT_REPO" | sed 's/[^a-zA-Z0-9:\/.\-_@]//g' | head -c 1000)
+[ -z "$GIT_REPO_SANITIZED" ] && GIT_REPO_SANITIZED="unknown"
 
 # Export as Terraform variables
 export TF_VAR_git_sha="$GIT_SHA"
@@ -27,17 +33,31 @@ export TF_VAR_git_branch="$GIT_BRANCH"
 export TF_VAR_git_repo="$GIT_REPO_SANITIZED"
 
 # Find terraform binary dynamically
-# Priority: terraform-real (from installation) > which terraform > terraform in PATH
-if [ -f ~/.local/bin/terraform-real ]; then
-    TERRAFORM_BIN=~/.local/bin/terraform-real
-elif command -v terraform-real >/dev/null 2>&1; then
-    TERRAFORM_BIN=$(command -v terraform-real)
-elif command -v terraform >/dev/null 2>&1; then
-    TERRAFORM_BIN=$(command -v terraform)
-else
+# Priority: terraform-real (from installation) > system terraform
+find_terraform_binary() {
+  local tf_bin=""
+  
+  if [ -f "$HOME/.local/bin/terraform-real" ]; then
+    tf_bin="$HOME/.local/bin/terraform-real"
+  elif command -v terraform-real >/dev/null 2>&1; then
+    tf_bin=$(command -v terraform-real)
+  elif command -v terraform >/dev/null 2>&1; then
+    tf_bin=$(command -v terraform)
+  else
     echo "Error: terraform binary not found. Please install Terraform." >&2
     exit 1
-fi
+  fi
+  
+  # Validate the binary is executable
+  if [ ! -x "$tf_bin" ]; then
+    echo "Error: terraform binary is not executable: $tf_bin" >&2
+    exit 1
+  fi
+  
+  echo "$tf_bin"
+}
+
+TERRAFORM_BIN=$(find_terraform_binary)
 
 # Pass through all arguments to terraform
 exec "$TERRAFORM_BIN" "$@"

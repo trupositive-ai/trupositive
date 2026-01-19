@@ -1,0 +1,131 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# CloudFormation wrapper that automatically injects Git metadata as parameters
+# Part of trupositive: https://github.com/trupositive-ai/trupositive
+
+set -e
+set -o pipefail
+
+# Extract Git metadata with safe defaults
+GIT_SHA=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+
+# Try to get branch name with better CI/detached HEAD handling
+GIT_BRANCH=$(git symbolic-ref --short -q HEAD 2>/dev/null || \
+  git rev-parse --abbrev-ref HEAD 2>/dev/null || \
+  echo "${GITHUB_REF_NAME:-${CI_COMMIT_REF_NAME:-${BUILD_SOURCEBRANCHNAME:-${BRANCH_NAME:-unknown}}}}")
+
+# Security: Sanitize branch name and limit length
+# Remove any characters that could break CloudFormation parameter syntax
+GIT_BRANCH=$(echo "$GIT_BRANCH" | sed 's/[^a-zA-Z0-9\/.\-_]//g' | head -c 200)
+[ -z "$GIT_BRANCH" ] && GIT_BRANCH="unknown"
+
+GIT_REPO=$(git config --get remote.origin.url 2>/dev/null || echo "unknown")
+
+# Sanitize Git repo URL to prevent injection
+# Keep only alphanumeric, :, /, ., -, _, and @
+# Also limit length to prevent extremely long URLs
+GIT_REPO_SANITIZED=$(echo "$GIT_REPO" | sed 's/[^a-zA-Z0-9:\/.\-_@]//g' | head -c 1000)
+[ -z "$GIT_REPO_SANITIZED" ] && GIT_REPO_SANITIZED="unknown"
+
+# Find AWS CLI binary dynamically
+# Priority: aws-real (from installation) > system aws
+find_aws_binary() {
+  local aws_bin=""
+  
+  if [ -f "$HOME/.local/bin/aws-real" ]; then
+    aws_bin="$HOME/.local/bin/aws-real"
+  elif command -v aws-real >/dev/null 2>&1; then
+    aws_bin=$(command -v aws-real)
+  elif command -v aws >/dev/null 2>&1; then
+    aws_bin=$(command -v aws)
+  else
+    echo "Error: aws CLI binary not found. Please install AWS CLI." >&2
+    exit 1
+  fi
+  
+  # Validate the binary is executable
+  if [ ! -x "$aws_bin" ]; then
+    echo "Error: aws CLI binary is not executable: $aws_bin" >&2
+    exit 1
+  fi
+  
+  echo "$aws_bin"
+}
+
+AWS_BIN=$(find_aws_binary)
+
+# Validate we have at least one argument
+if [ $# -eq 0 ]; then
+  exec "$AWS_BIN"
+fi
+
+# This wrapper should only handle CloudFormation commands
+# If called directly with non-CFN command, pass through to AWS CLI
+if [ "$1" != "cloudformation" ]; then
+  exec "$AWS_BIN" "$@"
+fi
+
+# Detect if this command accepts parameters
+command_accepts_parameters() {
+  local cmd=""
+  for arg in "$@"; do
+    # Skip flags and the "cloudformation" keyword
+    if [[ ! "$arg" =~ ^-- ]] && [ "$arg" != "cloudformation" ]; then
+      cmd="$arg"
+      break
+    fi
+  done
+  
+  case "$cmd" in
+    deploy|create-stack|update-stack|create-change-set)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# Parse arguments to inject Git parameters
+NEW_ARGS=()
+INJECT_PARAMS=true
+PARAM_OVERRIDE_ADDED=false
+PARAM_FILE_MODE=false
+
+for arg in "$@"; do
+  # Check if --parameter-overrides already exists
+  if [ "$arg" = "--parameter-overrides" ]; then
+    PARAM_OVERRIDE_ADDED=true
+    NEW_ARGS+=("$arg")
+    # Add our Git parameters right after --parameter-overrides
+    NEW_ARGS+=("GitSha=$GIT_SHA")
+    NEW_ARGS+=("GitBranch=$GIT_BRANCH")
+    NEW_ARGS+=("GitRepo=$GIT_REPO_SANITIZED")
+  # Check if --parameters is used (file-based parameters)
+  elif [ "$arg" = "--parameters" ]; then
+    PARAM_FILE_MODE=true
+    NEW_ARGS+=("$arg")
+  # Check if user explicitly disabled our injection (custom flag)
+  elif [ "$arg" = "--no-git-params" ]; then
+    INJECT_PARAMS=false
+    # Don't add this flag to NEW_ARGS as it's not a real AWS CLI flag
+  else
+    NEW_ARGS+=("$arg")
+  fi
+done
+
+# If --parameter-overrides wasn't provided and injection is enabled,
+# add it for commands that accept parameters
+if [ "$INJECT_PARAMS" = "true" ] && \
+   [ "$PARAM_OVERRIDE_ADDED" = "false" ] && \
+   [ "$PARAM_FILE_MODE" = "false" ]; then
+  if command_accepts_parameters "$@"; then
+    NEW_ARGS+=("--parameter-overrides")
+    NEW_ARGS+=("GitSha=$GIT_SHA")
+    NEW_ARGS+=("GitBranch=$GIT_BRANCH")
+    NEW_ARGS+=("GitRepo=$GIT_REPO_SANITIZED")
+  fi
+fi
+
+# Pass through all arguments to AWS CLI
+exec "$AWS_BIN" "${NEW_ARGS[@]}"
