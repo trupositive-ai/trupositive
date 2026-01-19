@@ -59,18 +59,21 @@ if [ $# -eq 0 ]; then
   exec "$AWS_BIN"
 fi
 
-# This wrapper should only handle CloudFormation commands
-# If called directly with non-CFN command, pass through to AWS CLI
-if [ "$1" != "cloudformation" ]; then
-  exec "$AWS_BIN" "$@"
+# Handle both calling patterns:
+# 1. From trupositive CLI: cloudformation deploy ...
+# 2. From aws wrapper: cloudformation cloudformation deploy ...
+# Strip "cloudformation" keyword if present as first argument
+if [ "$1" = "cloudformation" ]; then
+  shift
 fi
 
+# After stripping, check if this is a CloudFormation command
 # Detect if this command accepts parameters
 command_accepts_parameters() {
   local cmd=""
   for arg in "$@"; do
-    # Skip flags and the "cloudformation" keyword
-    if [[ ! "$arg" =~ ^-- ]] && [ "$arg" != "cloudformation" ]; then
+    # Skip flags to find the actual command
+    if [[ ! "$arg" =~ ^-- ]]; then
       cmd="$arg"
       break
     fi
@@ -85,6 +88,31 @@ command_accepts_parameters() {
       ;;
   esac
 }
+
+# Check if this looks like a CloudFormation command
+is_cloudformation_command() {
+  local cmd=""
+  for arg in "$@"; do
+    if [[ ! "$arg" =~ ^-- ]]; then
+      cmd="$arg"
+      break
+    fi
+  done
+  
+  case "$cmd" in
+    deploy|create-stack|update-stack|delete-stack|describe-stacks|list-stacks|create-change-set|execute-change-set|describe-change-set)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# If not a CloudFormation command, pass through to AWS CLI
+if ! is_cloudformation_command "$@"; then
+  exec "$AWS_BIN" "$@"
+fi
 
 # Parse arguments to inject Git parameters
 NEW_ARGS=()
@@ -127,5 +155,5 @@ if [ "$INJECT_PARAMS" = "true" ] && \
   fi
 fi
 
-# Pass through all arguments to AWS CLI
-exec "$AWS_BIN" "${NEW_ARGS[@]}"
+# Pass through all arguments to AWS CLI with "cloudformation" prefix
+exec "$AWS_BIN" cloudformation "${NEW_ARGS[@]}"

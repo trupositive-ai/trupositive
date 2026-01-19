@@ -675,6 +675,7 @@ case "$INFRA_TOOL" in
         echo "Error: cloudformation wrapper not found. Please install trupositive properly." >&2
         exit 1
     fi
+    # Pass arguments to cloudformation wrapper (it handles both direct and proxied calls)
     exec "$CLOUDFORMATION_WRAPPER" "$@"
     ;;
     

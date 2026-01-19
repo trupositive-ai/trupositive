@@ -63,45 +63,7 @@ The `uninstall.sh` script now:
 - `README.md` - Updated documentation with CloudFormation usage
 - `CHANGELOG.md` - Added version 1.1.0 entry
 
-## Usage Examples
-
-### CloudFormation Project
-
-```bash
-# Navigate to CloudFormation project
-cd my-cloudformation-project
-
-# Initialize trupositive
-trupositive init
-# Output: 🔍 Detected CloudFormation project
-#         ✨ Created trupositive-params.yaml
-
-# Add parameters to your CloudFormation template
-# (see trupositive-params.yaml for examples)
-
-# Deploy with automatic Git metadata injection
-aws cloudformation deploy \
-  --template-file template.yaml \
-  --stack-name my-stack
-
-# Git parameters are automatically added:
-# --parameter-overrides GitSha=abc123... GitBranch=feature/x GitRepo=...
-```
-
-### Terraform Project (Still Works!)
-
-```bash
-# Navigate to Terraform project
-cd my-terraform-project
-
-# Initialize trupositive
-trupositive init
-# Output: 🔍 Detected Terraform project
-#         ✨ Created trupositive.auto.tf
-
-# Use Terraform normally
-terraform apply
-```
+For complete usage examples, see [EXAMPLES.md](EXAMPLES.md).
 
 ## Architecture
 
