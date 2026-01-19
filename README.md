@@ -8,10 +8,30 @@ A zero-config Terraform wrapper that automatically injects Git metadata as varia
 curl -fsSL https://raw.githubusercontent.com/trupositive-ai/trupositive/main/install.sh | bash
 ```
 
-Ensure `~/.local/bin` is in your PATH:
+Ensure `~/.local/bin` is in your PATH. Add it temporarily for the current session:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
+```
+
+To make it permanent, add to your shell configuration file:
+
+**For zsh (macOS default):**
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+**For bash:**
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+After adding to PATH, verify the installation:
+```bash
+which terraform
+# Should show: /Users/yourusername/.local/bin/terraform
 ```
 
 ## Uninstallation
