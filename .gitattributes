@@ -1,0 +1,16 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Shell scripts
+*.sh text eol=lf
+terraform text eol=lf
+cloudformation text eol=lf
+trupositive text eol=lf
+
+# Documentation
+*.md text
+*.txt text
+
+# Archives
+*.tar.gz binary
+*.zip binary

@@ -1,3 +1,14 @@
 .DS_Store
 .DS_Store
 .DS_Store
+
+# Internal planning and documentation (not for public repo)
+NEXT_STEPS.md
+SUMMARY_GITHUB_OPTIMIZATION.md
+OSS_FRAMING_UPDATE.md
+GITHUB_OPTIMIZATION.md
+CODE_REVIEW.md
+CRITICAL_BUG_FIXED.md
+FINAL_ASSESSMENT.md
+RUN_THIS_FIRST.md
+VALIDATION_REPORT.md

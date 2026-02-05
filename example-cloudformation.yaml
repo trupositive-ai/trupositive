@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Example CloudFormation template with trupositive Git metadata
+
+Parameters:
+  GitSha:
+    Type: String
+    Default: "unknown"
+    Description: Git commit SHA
+  
+  GitBranch:
+    Type: String
+    Default: "unknown"
+    Description: Git branch name
+  
+  GitRepo:
+    Type: String
+    Default: "unknown"
+    Description: Git repository URL
+
+Resources:
+  ExampleBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'trupositive-example-${AWS::AccountId}'
+      Tags:
+        - Key: git_sha
+          Value: !Ref GitSha
+        - Key: git_branch
+          Value: !Ref GitBranch
+        - Key: git_repo
+          Value: !Ref GitRepo
+        - Key: managed_by
+          Value: trupositive
+
+Outputs:
+  BucketName:
+    Description: Name of the S3 bucket
+    Value: !Ref ExampleBucket
+  
+  GitMetadata:
+    Description: Git metadata injected into the stack
+    Value: !Sub '${GitSha} from ${GitBranch} (${GitRepo})'

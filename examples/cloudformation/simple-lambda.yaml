@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Simple Lambda function with trupositive Git metadata tagging
+
+# Usage:
+#   aws cloudformation deploy \
+#     --template-file simple-lambda.yaml \
+#     --stack-name trupositive-example \
+#     --capabilities CAPABILITY_IAM
+#
+# trupositive automatically injects GitSha, GitBranch, GitRepo parameters
+
+Parameters:
+  GitSha:
+    Type: String
+    Default: "unknown"
+    Description: Git commit SHA (auto-injected by trupositive)
+  
+  GitBranch:
+    Type: String
+    Default: "unknown"
+    Description: Git branch name (auto-injected by trupositive)
+  
+  GitRepo:
+    Type: String
+    Default: "unknown"
+    Description: Git repository URL (auto-injected by trupositive)
+
+Resources:
+  # Lambda execution role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: git_sha
+          Value: !Ref GitSha
+        - Key: git_branch
+          Value: !Ref GitBranch
+        - Key: git_repo
+          Value: !Ref GitRepo
+        - Key: managed_by
+          Value: cloudformation
+
+  # Lambda function
+  ExampleFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-function'
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import json
+          import os
+          
+          def handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({
+                      'message': 'Hello from trupositive!',
+                      'git_sha': os.environ.get('GIT_SHA', 'unknown'),
+                      'git_branch': os.environ.get('GIT_BRANCH', 'unknown')
+                  })
+              }
+      Environment:
+        Variables:
+          GIT_SHA: !Ref GitSha
+          GIT_BRANCH: !Ref GitBranch
+      Tags:
+        - Key: git_sha
+          Value: !Ref GitSha
+        - Key: git_branch
+          Value: !Ref GitBranch
+        - Key: git_repo
+          Value: !Ref GitRepo
+        - Key: managed_by
+          Value: cloudformation
+
+  # CloudWatch Log Group
+  FunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ExampleFunction}'
+      RetentionInDays: 7
+
+Outputs:
+  FunctionName:
+    Description: Lambda function name
+    Value: !Ref ExampleFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-FunctionName'
+
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt ExampleFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-FunctionArn'
+
+  GitMetadata:
+    Description: Git metadata for this deployment
+    Value: !Sub 'Deployed from commit ${GitSha} on branch ${GitBranch} (${GitRepo})'
+
+  TestCommand:
+    Description: Command to test the Lambda function
+    Value: !Sub 'aws lambda invoke --function-name ${ExampleFunction} response.json && cat response.json'
