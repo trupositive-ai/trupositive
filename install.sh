@@ -7,7 +7,6 @@ set -e
 set -o pipefail
 
 BIN_DIR="${TRUPOSITIVE_BIN_DIR:-$HOME/.local/bin}"
-REPO="trupositive-ai/trupositive"
 
 # Find binaries with validation
 REAL_TF=""
